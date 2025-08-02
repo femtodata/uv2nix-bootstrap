@@ -109,6 +109,7 @@
                 fileset = lib.fileset.unions [
                   (old.src + "/pyproject.toml")
                   (old.src + "/README.md")
+                  (old.src + "/src")
                 ];
               };
 
@@ -132,12 +133,37 @@
       # Build virtual environment, with local packages being editable.
 
       # Enable all optional dependencies for development.
-      virtualenvEditable = editablePythonSet.mkVirtualEnv "uv-editable-env" workspace.deps.all;
+      virtualenvEditable = (editablePythonSet.mkVirtualEnv "uv-editable-env" workspace.deps.all).overrideAttrs(
+        old: {
+          # fastapi-cli collision
+          venvIgnoreCollisions = [ "bin/fastapi" ];
+        }
+      );
+
+      # Enable no optional dependencies for production build.
+      virtualenv = (pythonSet.mkVirtualEnv "uv-env" workspace.deps.default).overrideAttrs(
+        old: {
+          # fastapi-cli collision
+          venvIgnoreCollisions = [ "bin/fastapi" ];
+        }
+      );
+
 
     in
     {
 
-      packages.x86_64-linux.virtualenvEditable = virtualenvEditable;
+      packages.x86_64-linux = {
+        default = virtualenv;
+        virtualenvEditable = virtualenvEditable;
+      };
+
+      # Make hello runnable with `nix run`
+      apps.x86_64-linux = {
+        default = {
+          type = "app";
+          program = "${self.packages.x86_64-linux.default}/bin/run-server";
+        };
+      };
 
       devShells.x86_64-linux = {
 
